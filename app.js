@@ -99,8 +99,8 @@ function getList(key) {
 function saveList(key, list) {
   if (FIREBASE_LISTO) {
     cloudCache[key] = list;
-    if (currentUser && db) {
-      db.collection('usuarios').doc(currentUser.uid).collection('datos').doc(key)
+    if (currentUser && db && miembroActual) {
+      equipoRef().collection('datos').doc(key)
         .set({ lista: list })
         .catch(err => console.error('Error guardando en la nube:', err));
     }
@@ -109,14 +109,14 @@ function saveList(key, list) {
   localStorage.setItem(key, JSON.stringify(list));
 }
 
-// Arranca la sincronización en tiempo real con Firestore para el
-// usuario logueado: cada colección se escucha con onSnapshot, así
-// que si el mismo usuario carga datos desde otro dispositivo, esta
-// pantalla se actualiza sola.
-function iniciarSincronizacion(uid) {
+// Arranca la sincronización en tiempo real con Firestore de los datos
+// COMPARTIDOS del equipo (todos los miembros ven y editan lo mismo):
+// cada colección se escucha con onSnapshot, así que si alguien carga
+// datos desde otro dispositivo, esta pantalla se actualiza sola.
+function iniciarSincronizacion() {
   detenerSincronizacion();
   Object.values(STORAGE_KEYS).forEach(key => {
-    const unsub = db.collection('usuarios').doc(uid).collection('datos').doc(key)
+    const unsub = equipoRef().collection('datos').doc(key)
       .onSnapshot(doc => {
         const datos = doc.exists ? doc.data() : null;
         cloudCache[key] = (datos && Array.isArray(datos.lista)) ? datos.lista : [];
@@ -131,6 +131,179 @@ function iniciarSincronizacion(uid) {
 function detenerSincronizacion() {
   firestoreListeners.forEach(unsub => unsub());
   firestoreListeners = [];
+}
+
+// ====================================================
+// EQUIPO / USUARIOS (modo Firebase): todos los usuarios aprobados
+// ven y editan los MISMOS datos (ya no hay datos separados por
+// usuario). El acceso lo controla la colección
+// equipo/rallyops/miembros: solo quien tiene un documento ahí puede
+// leer/escribir los datos, y solo los admins pueden aprobar
+// solicitudes o gestionar miembros.
+// ====================================================
+function equipoRef() {
+  return db.collection('equipo').doc('rallyops');
+}
+
+let miembroActual = null;   // { email, admin } del usuario logueado, o null si no es miembro
+let esAdminActual = false;
+let listaMiembros = [];     // [{ uid, email, admin }]
+let listaSolicitudes = [];  // [{ uid, email }]
+let unsubMiembroPropio = null;
+let unsubMiembros = null;
+let unsubSolicitudes = null;
+let solicitudCreada = false;
+
+function detenerListenersEquipo() {
+  detenerSincronizacion();
+  if (unsubMiembroPropio) { unsubMiembroPropio(); unsubMiembroPropio = null; }
+  if (unsubMiembros) { unsubMiembros(); unsubMiembros = null; }
+  if (unsubSolicitudes) { unsubSolicitudes(); unsubSolicitudes = null; }
+  miembroActual = null;
+  esAdminActual = false;
+  listaMiembros = [];
+  listaSolicitudes = [];
+  solicitudCreada = false;
+}
+
+// Se llama apenas hay un usuario logueado: escucha en tiempo real si
+// ese usuario ya es miembro del equipo (y si es admin). Si todavía no
+// lo es, crea una solicitud de acceso y muestra la pantalla de
+// espera; el mismo listener lo mete a la app solo apenas lo aprueben,
+// sin que tenga que volver a loguearse.
+function verificarAcceso(user) {
+  unsubMiembroPropio = equipoRef().collection('miembros').doc(user.uid)
+    .onSnapshot(doc => {
+      if (doc.exists) {
+        miembroActual = doc.data();
+        esAdminActual = !!miembroActual.admin;
+        // Por si esta cuenta había quedado con una solicitud de acceso
+        // de antes de ser aprobada (ej. el primer admin, cargado a
+        // mano en Firestore): la limpiamos, si no ya no hace falta.
+        equipoRef().collection('solicitudes').doc(user.uid).delete().catch(() => {});
+        iniciarSincronizacion();
+        iniciarSincronizacionEquipo();
+        navState.competenciaId = null;
+        navState.sesion = null;
+        navState.pasada = null;
+        navState.vista = 'resumen';
+        showScreen('screen-competencias');
+        renderCompetencias();
+      } else {
+        miembroActual = null;
+        esAdminActual = false;
+        detenerSincronizacion();
+        if (unsubMiembros) { unsubMiembros(); unsubMiembros = null; }
+        if (unsubSolicitudes) { unsubSolicitudes(); unsubSolicitudes = null; }
+        if (!solicitudCreada) {
+          solicitudCreada = true;
+          equipoRef().collection('solicitudes').doc(user.uid)
+            .set({ email: user.email || '', creadoEn: new Date().toISOString() }, { merge: true })
+            .catch(err => console.error('No se pudo crear la solicitud de acceso:', err));
+        }
+        const emailEl = document.getElementById('pendiente-email');
+        if (emailEl) emailEl.textContent = user.email || '';
+        showScreen('screen-pendiente');
+      }
+    }, err => {
+      console.error('Error verificando acceso:', err);
+    });
+}
+
+// Escucha la lista de miembros y (si corresponde) las solicitudes
+// pendientes, para dibujar el panel de Usuarios en tiempo real.
+function iniciarSincronizacionEquipo() {
+  if (unsubMiembros) unsubMiembros();
+  unsubMiembros = equipoRef().collection('miembros').onSnapshot(snap => {
+    listaMiembros = snap.docs.map(d => Object.assign({ uid: d.id }, d.data()));
+    renderModalUsuarios();
+    updateHeader();
+  }, err => console.error('Error leyendo miembros:', err));
+
+  if (unsubSolicitudes) { unsubSolicitudes(); unsubSolicitudes = null; }
+  if (esAdminActual) {
+    unsubSolicitudes = equipoRef().collection('solicitudes').onSnapshot(snap => {
+      listaSolicitudes = snap.docs.map(d => Object.assign({ uid: d.id }, d.data()));
+      renderModalUsuarios();
+    }, err => console.error('Error leyendo solicitudes:', err));
+  } else {
+    listaSolicitudes = [];
+  }
+}
+
+function abrirModalUsuarios() {
+  renderModalUsuarios();
+  document.getElementById('modal-usuarios').classList.remove('hidden');
+}
+
+function cerrarModalUsuarios() {
+  document.getElementById('modal-usuarios').classList.add('hidden');
+}
+
+function renderModalUsuarios() {
+  const wrapSolicitudes = document.getElementById('usuarios-solicitudes-wrap');
+  const listSolicitudesEl = document.getElementById('usuarios-solicitudes-list');
+  const listMiembrosEl = document.getElementById('usuarios-miembros-list');
+  if (!listMiembrosEl) return;
+
+  if (esAdminActual && listaSolicitudes.length > 0) {
+    wrapSolicitudes.classList.remove('hidden');
+    listSolicitudesEl.innerHTML = listaSolicitudes.map(s => `
+      <div class="flex items-center justify-between gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
+        <span class="text-sm text-gray-800 truncate">${escapeHtml(s.email || s.uid)}</span>
+        <div class="flex gap-1 shrink-0">
+          <button onclick="aprobarSolicitud('${s.uid}')" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-[#e6491b] hover:bg-[#ff5722] text-white transition">Aprobar</button>
+          <button onclick="rechazarSolicitud('${s.uid}')" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Rechazar</button>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    wrapSolicitudes.classList.add('hidden');
+    listSolicitudesEl.innerHTML = '';
+  }
+
+  listMiembrosEl.innerHTML = listaMiembros.map(m => `
+    <div class="flex items-center justify-between gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+      <div class="min-w-0">
+        <span class="text-sm text-gray-800 truncate">${escapeHtml(m.email || m.uid)}</span>
+        ${m.admin ? '<span class="badge ml-2">Admin</span>' : ''}
+      </div>
+      ${esAdminActual ? `
+        <div class="flex gap-1 shrink-0">
+          <button onclick="toggleAdmin('${m.uid}', ${!!m.admin})" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition">${m.admin ? 'Sacar admin' : 'Hacer admin'}</button>
+          <button onclick="quitarAcceso('${m.uid}')" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition">Quitar</button>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function aprobarSolicitud(uid) {
+  const sol = listaSolicitudes.find(s => s.uid === uid);
+  if (!sol) return;
+  equipoRef().collection('miembros').doc(uid).set({ email: sol.email || '', admin: false })
+    .then(() => equipoRef().collection('solicitudes').doc(uid).delete())
+    .catch(err => alert('No se pudo aprobar: ' + err.message));
+}
+
+function rechazarSolicitud(uid) {
+  equipoRef().collection('solicitudes').doc(uid).delete()
+    .catch(err => alert('No se pudo rechazar: ' + err.message));
+}
+
+function toggleAdmin(uid, esAdminAhora) {
+  equipoRef().collection('miembros').doc(uid).update({ admin: !esAdminAhora })
+    .catch(err => alert('No se pudo actualizar: ' + err.message));
+}
+
+function quitarAcceso(uid) {
+  if (currentUser && uid === currentUser.uid) {
+    alert('No podés quitarte el acceso a vos mismo desde acá.');
+    return;
+  }
+  if (!confirm('¿Quitar el acceso de este usuario a los datos del equipo?')) return;
+  equipoRef().collection('miembros').doc(uid).delete()
+    .catch(err => alert('No se pudo quitar el acceso: ' + err.message));
 }
 
 // Vuelve a dibujar lo que esté en pantalla ahora mismo, sin cambiar
@@ -148,6 +321,13 @@ function refrescarPantallaActual() {
     renderBaseSetups();
     showModulo(navState.modulo);
   }
+}
+
+function mostrarAvisoFirebase(mensaje) {
+  const banner = document.getElementById('firebase-warning-banner');
+  if (!banner) return;
+  banner.textContent = mensaje;
+  banner.classList.remove('hidden');
 }
 
 // Convierte texto ingresado por el usuario a HTML seguro.
@@ -240,12 +420,22 @@ function updateHeader() {
   const activeScreen = document.querySelector('.screen.active').id;
 
   const acciones = document.getElementById('header-acciones');
-  if (acciones) acciones.classList.toggle('hidden', activeScreen === 'screen-auth');
+  const ocultarAcciones = activeScreen === 'screen-auth' || activeScreen === 'screen-pendiente';
+  if (acciones) acciones.classList.toggle('hidden', ocultarAcciones);
+
+  const btnUsuarios = document.getElementById('btn-usuarios');
+  if (btnUsuarios) {
+    btnUsuarios.classList.toggle('hidden', ocultarAcciones || !esAdminActual);
+  }
 
   if (activeScreen === 'screen-auth') {
     backBtn.classList.add('hidden');
     title.innerHTML = 'RALLY<span class="text-[#ff5722]">OPS</span>';
     subtitle.textContent = 'Iniciá sesión';
+  } else if (activeScreen === 'screen-pendiente') {
+    backBtn.classList.add('hidden');
+    title.innerHTML = 'RALLY<span class="text-[#ff5722]">OPS</span>';
+    subtitle.textContent = 'Esperando aprobación';
   } else if (activeScreen === 'screen-competencias') {
     backBtn.classList.add('hidden');
     title.innerHTML = 'RALLY<span class="text-[#ff5722]">OPS</span>';
@@ -1842,6 +2032,14 @@ function restaurarBackup(file) {
 // ARRANQUE DE LA APP
 // --------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+  // Aviso visible si algo impide que el login funcione bien, en vez
+  // de fallar en silencio y mostrar la app en modo local sin más.
+  if (FIREBASE_HABILITADO && location.protocol === 'file:') {
+    mostrarAvisoFirebase('Esta página se abrió como archivo local: el login no funciona así. Abrila desde la URL publicada (https://...).');
+  } else if (FIREBASE_HABILITADO && !FIREBASE_LISTO) {
+    mostrarAvisoFirebase('No se pudo conectar con Firebase. Revisá la consola del navegador (F12) para más detalles.');
+  }
+
   if (FIREBASE_LISTO) {
     // La pantalla inicial (login o Mis Competencias) la decide
     // onAuthStateChanged, más abajo, apenas Firebase sepa si hay
@@ -1869,18 +2067,20 @@ document.addEventListener('DOMContentLoaded', () => {
     auth.onAuthStateChanged(user => {
       currentUser = user;
       if (user) {
-        iniciarSincronizacion(user.uid);
-        navState.competenciaId = null;
-        navState.sesion = null;
-        navState.pasada = null;
-        navState.vista = 'resumen';
-        showScreen('screen-competencias');
-        renderCompetencias();
+        verificarAcceso(user);
       } else {
-        detenerSincronizacion();
+        detenerListenersEquipo();
         cloudCache = { competencias: [], neumaticos: [], setups: [], tramos: [] };
         showScreen('screen-auth');
       }
+    });
+  }
+
+  // Modal de usuarios del equipo
+  const modalUsuarios = document.getElementById('modal-usuarios');
+  if (modalUsuarios) {
+    modalUsuarios.addEventListener('click', (e) => {
+      if (e.target === modalUsuarios) cerrarModalUsuarios();
     });
   }
 

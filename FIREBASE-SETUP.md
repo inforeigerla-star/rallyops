@@ -60,15 +60,65 @@ nada, todo se hace desde el navegador):
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
-       match /usuarios/{uid}/datos/{docId} {
-         allow read, write: if request.auth != null && request.auth.uid == uid;
+
+       function esMiembro() {
+         return request.auth != null &&
+           exists(/databases/$(database)/documents/equipo/rallyops/miembros/$(request.auth.uid));
+       }
+       function esAdmin() {
+         return esMiembro() &&
+           get(/databases/$(database)/documents/equipo/rallyops/miembros/$(request.auth.uid)).data.admin == true;
+       }
+
+       // Datos compartidos del equipo: todos los miembros aprobados
+       // ven y editan lo mismo.
+       match /equipo/rallyops/datos/{docId} {
+         allow read, write: if esMiembro();
+       }
+
+       // Lista de miembros con acceso. Solo un admin puede agregar,
+       // sacar o dar/quitar permisos de admin.
+       match /equipo/rallyops/miembros/{uid} {
+         allow read: if esMiembro();
+         allow write: if esAdmin();
+       }
+
+       // Solicitudes de acceso: cualquiera que se registre puede crear
+       // la suya propia; solo los admins las ven y las borran (al
+       // aprobar o rechazar).
+       match /equipo/rallyops/solicitudes/{uid} {
+         allow create: if request.auth != null && request.auth.uid == uid;
+         allow read: if esAdmin();
+         allow delete: if esAdmin() || (request.auth != null && request.auth.uid == uid && esMiembro());
+         allow update: if false;
        }
      }
    }
    ```
 
-   Esto hace que cada usuario solo pueda leer y escribir sus propios
-   datos — nadie puede ver los de otro. Tocá **"Publicar"**.
+   Con esto, todos los usuarios aprobados ven la misma información
+   (competencias, neumáticos, setups, tramos) — no hay datos separados
+   por usuario. Tocá **"Publicar"**.
+
+   **Importante — primer administrador (paso único, manual):** las
+   reglas de arriba hacen que solo un admin pueda agregar miembros,
+   así que el primero hay que cargarlo a mano:
+
+   1. Entrá a la app y creá tu cuenta normalmente (pestaña "Crear
+      cuenta"). Vas a quedar en "Esperando aprobación" — es normal.
+   2. En Firebase Console: **Authentication → Users**, copiá tu
+      **User UID**.
+   3. Andá a **Firestore Database → Datos** → **"+ Iniciar
+      colección"** → nombre `equipo` → ID de documento `rallyops` →
+      guardalo con cualquier campo (ej. `nombre: "RallyOps"`).
+   4. Dentro de ese documento `rallyops`, creá una subcolección
+      llamada `miembros` → como ID de documento pegá tu **User UID** →
+      agregale dos campos: `email` (string, tu email) y `admin`
+      (boolean, `true`). Guardá.
+   5. Volvé a la app (o recargá la página) — ya deberías entrar
+      directo, y vas a ver el botón de "Usuarios" (ícono de personas)
+      en el encabezado para aprobar al resto del equipo desde ahí, sin
+      tener que tocar Firebase de nuevo.
 
 5. Andá a **Configuración del proyecto** (el ícono de engranaje,
    arriba a la izquierda) → pestaña **"General"** → bajá hasta
@@ -106,11 +156,26 @@ nada, todo se hace desde el navegador):
 
 ## Cómo se guardan los datos
 
-Cada usuario tiene sus datos en Firestore bajo
-`usuarios/{su-uid}/datos/{competencias|neumaticos|setups|tramos}`.
-Cuando carga algo en un dispositivo, se sincroniza solo (en tiempo
-real) a cualquier otro dispositivo donde esté logueado con la misma
-cuenta.
+Los datos son **compartidos entre todo el equipo**, no por usuario:
+quedan en Firestore bajo
+`equipo/rallyops/datos/{competencias|neumaticos|setups|tramos}`. Cuando
+alguien carga algo desde un dispositivo, se sincroniza solo (en tiempo
+real) a todos los demás miembros logueados, sin importar quién lo
+cargó.
 
 El botón de backup (⬇️/⬆️ en el encabezado) sigue funcionando igual:
 exporta/importa un JSON con todo, útil como respaldo aparte.
+
+## Gestión de usuarios
+
+Cuando alguien crea una cuenta nueva, queda en "Esperando aprobación"
+hasta que un admin lo apruebe. Los admins ven un botón de **"Usuarios"**
+(ícono de personas) en el encabezado, con:
+
+- **Solicitudes pendientes**: aprobar o rechazar cuentas nuevas.
+- **Miembros**: la lista de quienes ya tienen acceso, con botones para
+  hacer/sacar admin o quitarle el acceso a alguien.
+
+No hay forma de borrar una cuenta de Firebase Auth desde la app (eso
+requiere el panel de Firebase), pero "Quitar" le saca el acceso a los
+datos del equipo al instante, aunque la cuenta siga existiendo.

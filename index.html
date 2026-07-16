@@ -34,6 +34,8 @@
 
 <body class="bg-gray-50 text-gray-900">
 
+<div id="firebase-warning-banner" class="hidden bg-amber-50 border-b border-amber-200 text-amber-800 text-xs px-4 py-2 text-center"></div>
+
 <div class="min-h-screen flex flex-col">
 
   <!-- ============ HEADER (cambia según dónde estés navegando) ============ -->
@@ -54,6 +56,9 @@
       </button>
       <button onclick="document.getElementById('input-restaurar-backup').click()" title="Restaurar backup (JSON)" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg>
+      </button>
+      <button id="btn-usuarios" onclick="abrirModalUsuarios()" title="Usuarios del equipo" class="hidden w-9 h-9 items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </button>
       <button id="btn-logout" onclick="cerrarSesion()" title="Cerrar sesión" class="hidden w-9 h-9 items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
@@ -96,6 +101,21 @@
 
           <button type="button" onclick="enviarResetPassword()" class="w-full text-center text-xs text-gray-500 hover:text-gray-700 mt-4 transition">¿Olvidaste tu contraseña?</button>
         </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         PANTALLA DE ACCESO PENDIENTE
+         Usuario logueado pero todavía no aprobado por un admin del equipo.
+         ================================================================ -->
+    <section id="screen-pendiente" class="screen">
+      <div class="max-w-sm mx-auto mt-6 sm:mt-12 text-center">
+        <div class="w-16 h-16 rounded-2xl bg-[#ff5722]/10 text-[#c2410c] flex items-center justify-center mb-5 mx-auto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3 class="font-display text-lg font-semibold mb-2">Esperando aprobación</h3>
+        <p class="text-sm text-gray-600">Tu cuenta (<span id="pendiente-email" class="font-medium"></span>) ya se creó, pero todavía no tiene acceso a los datos del equipo. Pedile a un administrador que te apruebe desde el panel de Usuarios.</p>
+        <button type="button" onclick="cerrarSesion()" class="mt-6 text-sm text-gray-500 hover:text-gray-700 transition">Cerrar sesión</button>
       </div>
     </section>
 
@@ -594,6 +614,32 @@
         <button type="submit" class="flex-1 py-2.5 rounded-xl bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-semibold transition">Guardar</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Usuarios del equipo ============ -->
+<div id="modal-usuarios" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-display text-lg font-semibold text-gray-900">Usuarios del equipo</h3>
+      <button type="button" onclick="cerrarModalUsuarios()" class="text-gray-600 hover:text-gray-900 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-5 h-5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <p class="text-xs text-gray-500 mb-4">Todos los miembros ven y editan la misma información. Solo un admin puede aprobar, sacar acceso o dar/quitar permisos de admin.</p>
+
+    <div id="usuarios-solicitudes-wrap" class="hidden mb-5">
+      <p class="form-label mb-2">Solicitudes pendientes</p>
+      <div id="usuarios-solicitudes-list" class="space-y-2"></div>
+    </div>
+
+    <div>
+      <p class="form-label mb-2">Miembros</p>
+      <div id="usuarios-miembros-list" class="space-y-2"></div>
+    </div>
+
+    <button type="button" onclick="cerrarModalUsuarios()" class="w-full mt-5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition">Cerrar</button>
   </div>
 </div>
 
