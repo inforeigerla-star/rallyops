@@ -21,10 +21,10 @@
 // la app para que termine de configurar las reglas de seguridad.
 
 const firebaseConfig = {
-  apiKey: "PEGAR_AQUI",
-  authDomain: "PEGAR_AQUI",
-  projectId: "PEGAR_AQUI",
-  storageBucket: "PEGAR_AQUI",
-  messagingSenderId: "PEGAR_AQUI",
-  appId: "PEGAR_AQUI"
+  apiKey: "AIzaSyCniwaOOUdIkpz_db3aR45pq0baEJVlEbw",
+  authDomain: "rallyops-ba452.firebaseapp.com",
+  projectId: "rallyops-ba452",
+  storageBucket: "rallyops-ba452.firebasestorage.app",
+  messagingSenderId: "191242017754",
+  appId: "1:191242017754:web:06b15e8b8802897cc9fee3"
 };
