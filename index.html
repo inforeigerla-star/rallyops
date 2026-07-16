@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+<title>RallyOps</title>
+
+<!-- Tailwind vía CDN: nos da todas las clases de utilidad sin instalar nada -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- jsPDF: genera el PDF del Resumen directamente en el navegador,
+     sin necesidad de servidor. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- jsPDF-AutoTable: dibuja los cuadros/tablas del PDF de Resumen.
+     Si por algún motivo no llega a cargar (sin internet), el PDF
+     igual se genera, solo que en formato texto en vez de cuadros. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<!-- Firebase (opcional): da cuentas de usuario y sincroniza los datos
+     entre dispositivos. Si "firebase-config.js" no tiene una config
+     real todavía, la app sigue funcionando 100% local como antes. -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+
+<!-- Tipografías: Rajdhani para títulos (estilo "digital/deportivo"), Inter para texto -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
+
+<!-- Nuestros estilos propios -->
+<link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="bg-gray-50 text-gray-900">
+
+<div class="min-h-screen flex flex-col">
+
+  <!-- ============ HEADER (cambia según dónde estés navegando) ============ -->
+  <header id="app-header" class="sticky top-0 z-30 px-4 sm:px-5 py-4 border-b border-gray-200 bg-white/90 backdrop-blur flex items-center gap-3 shrink-0">
+    <button id="btn-back" onclick="goBack()" class="hidden w-9 h-9 items-center justify-center rounded-full hover:bg-gray-100 transition shrink-0">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+    </button>
+    <div class="min-w-0 flex-1">
+      <h1 id="header-title" class="font-display font-bold text-lg tracking-wide truncate">RALLY<span class="text-[#ff5722]">OPS</span></h1>
+      <p id="header-subtitle" class="text-xs text-gray-600 truncate">Mis Competencias</p>
+    </div>
+    <div id="header-acciones" class="flex items-center gap-1 shrink-0">
+      <input type="file" id="input-restaurar-backup" accept="application/json" class="hidden" />
+      <button onclick="descargarBackup()" title="Descargar backup (JSON)" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      </button>
+      <button onclick="document.getElementById('input-restaurar-backup').click()" title="Restaurar backup (JSON)" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg>
+      </button>
+      <button id="btn-logout" onclick="cerrarSesion()" title="Cerrar sesión" class="hidden w-9 h-9 items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="screen-container" class="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 pb-10 max-w-6xl w-full mx-auto">
+
+    <!-- ================================================================
+         PANTALLA DE INICIO DE SESIÓN
+         Solo se usa si firebase-config.js tiene una configuración real.
+         Si no, la app arranca directo en "Mis Competencias" como antes.
+         ================================================================ -->
+    <section id="screen-auth" class="screen">
+      <div class="max-w-sm mx-auto mt-6 sm:mt-12">
+        <div class="text-center mb-8">
+          <h1 class="font-display font-bold text-2xl tracking-wide">RALLY<span class="text-[#ff5722]">OPS</span></h1>
+          <p class="text-sm text-gray-600 mt-2">Iniciá sesión para acceder a tus datos desde cualquier dispositivo.</p>
+        </div>
+
+        <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+          <div class="flex mb-5 border-b border-gray-200">
+            <button type="button" data-auth-tab="login" class="modulo-tab">Iniciar sesión</button>
+            <button type="button" data-auth-tab="registro" class="modulo-tab">Crear cuenta</button>
+          </div>
+
+          <form id="form-auth" class="space-y-4">
+            <div>
+              <label class="form-label">Email</label>
+              <input type="email" id="auth-email" required class="form-input" placeholder="tu@email.com" />
+            </div>
+            <div>
+              <label class="form-label">Contraseña</label>
+              <input type="password" id="auth-password" required minlength="6" class="form-input" placeholder="Mínimo 6 caracteres" />
+            </div>
+            <p id="auth-error" class="hidden text-xs text-red-600"></p>
+            <button type="submit" id="auth-submit-btn" class="w-full py-2.5 rounded-xl bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-semibold transition">Iniciar sesión</button>
+          </form>
+
+          <button type="button" onclick="enviarResetPassword()" class="w-full text-center text-xs text-gray-500 hover:text-gray-700 mt-4 transition">¿Olvidaste tu contraseña?</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         NIVEL 1: Mis Competencias (pantalla inicial)
+         ================================================================ -->
+    <section id="screen-competencias" class="screen">
+      <div class="flex items-center justify-between mb-6 gap-3">
+        <p class="text-gray-600 text-sm">Elegí una competencia o creá una nueva para empezar a cargar datos.</p>
+        <button onclick="openCompetenciaModal()" class="shrink-0 flex items-center gap-2 bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-medium px-4 py-2.5 rounded-xl transition">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-4 h-4"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="hidden sm:inline">Nueva Competencia</span>
+        </button>
+      </div>
+
+      <!-- Estado vacío -->
+      <div id="competencias-empty" class="hidden flex-col items-center justify-center text-center py-20">
+        <div class="w-16 h-16 rounded-2xl bg-[#ff5722]/10 text-[#c2410c] flex items-center justify-center mb-5 mx-auto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8">
+            <path d="M4 21V4"/><path d="M4 4h13l-2.5 3.5L17 11H4"/>
+          </svg>
+        </div>
+        <h3 class="font-display text-lg font-semibold mb-2">Todavía no cargaste ninguna competencia</h3>
+        <p class="text-sm text-gray-600 max-w-sm mx-auto">Tocá "Nueva Competencia" para crear la primera y empezar a organizar sesiones y pasadas.</p>
+      </div>
+
+      <!-- Acá se dibujan las tarjetas de competencias (lo hace app.js) -->
+      <div id="competencias-list" class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]"></div>
+    </section>
+
+    <!-- ================================================================
+         NIVEL 2: Dentro de una Competencia -> Tipo de Sesión -> Pasadas
+         ================================================================ -->
+    <section id="screen-competencia" class="screen">
+      <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 mb-6">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <span id="competencia-piloto-badge" class="badge inline-block mb-2"></span>
+            <h2 id="competencia-nombre" class="font-display text-xl font-semibold text-gray-900 truncate"></h2>
+            <p id="competencia-fecha" class="text-xs text-gray-600 mt-1"></p>
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button onclick="editCurrentCompetencia()" class="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+            </button>
+            <button onclick="deleteCurrentCompetencia()" class="w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista: Resumen general de la competencia / Pasadas por sesión -->
+      <div class="flex mb-6 border-b border-gray-200">
+        <button data-vista="resumen" class="modulo-tab">Resumen</button>
+        <button data-vista="pasadas" class="modulo-tab">Pasadas</button>
+      </div>
+
+      <!-- ---- Vista: RESUMEN ---- -->
+      <div id="vista-resumen" class="vista-panel hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <p class="text-sm text-gray-600">Resumen completo de la competencia, listo para exportar.</p>
+          <div class="flex gap-2 shrink-0">
+            <button id="btn-descargar-pdf" onclick="descargarResumenPDF()" class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              <span>Descargar PDF</span>
+            </button>
+            <button id="btn-compartir-pdf" onclick="compartirResumenPDF()" class="hidden items-center gap-1.5 text-xs font-semibold px-3 py-2.5 rounded-xl bg-[#e6491b] hover:bg-[#ff5722] text-white transition">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg>
+              <span>Compartir</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 mb-6">
+          <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-4 text-center">
+            <p class="text-2xl font-display font-bold text-gray-900"><span id="resumen-count-neumaticos">0</span></p>
+            <p class="text-xs text-gray-600 mt-1">Neumáticos</p>
+          </div>
+          <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-4 text-center">
+            <p class="text-2xl font-display font-bold text-gray-900"><span id="resumen-count-setups">0</span></p>
+            <p class="text-xs text-gray-600 mt-1">Setups</p>
+          </div>
+          <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-4 text-center">
+            <p class="text-2xl font-display font-bold text-gray-900"><span id="resumen-count-tramos">0</span></p>
+            <p class="text-xs text-gray-600 mt-1">Tramos</p>
+          </div>
+        </div>
+
+        <p class="form-label mb-2">Detalle por pasada</p>
+        <div id="resumen-sesiones" class="space-y-4"></div>
+      </div>
+
+      <!-- ---- Vista: PASADAS (sesión + grilla de pasadas) ---- -->
+      <div id="vista-pasadas" class="vista-panel">
+        <p class="form-label mb-2">Tipo de sesión</p>
+        <div id="sesion-tabs" class="flex flex-wrap gap-2 mb-6">
+          <button data-sesion="Test" class="sesion-tab">Test</button>
+          <button data-sesion="Shakedown" class="sesion-tab">Shakedown</button>
+          <button data-sesion="Race" class="sesion-tab">Race</button>
+        </div>
+
+        <!-- Se muestra hasta que se elige un tipo de sesión -->
+        <div id="pasadas-hint" class="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 text-center">
+          <p class="text-sm text-gray-600">Elegí un tipo de sesión arriba para ver sus pasadas.</p>
+        </div>
+
+        <!-- Base de la sesión: el neumático y el setup que se repiten en
+             todas las pasadas de esta sesión, salvo que se cargue algo
+             distinto puntualmente en alguna. -->
+        <div id="sesion-base-wrap" class="hidden mb-6">
+          <div class="bg-[#fff4f0] border border-[#ff5722]/20 rounded-2xl p-4 mb-5">
+            <p class="text-xs text-gray-700">La <span class="font-semibold text-[#c2410c]">base de la sesión</span> se usa automáticamente en todas sus pasadas. Si algo cambia en una pasada puntual, cargalo desde esa pasada y va a quedar marcado como cambio.</p>
+          </div>
+
+          <div class="flex items-center justify-between mb-3">
+            <p class="form-label mb-0">Neumático base</p>
+            <button onclick="openNeumaticoModal(null, true)" class="text-xs font-semibold text-[#c2410c] hover:text-[#e6491b] transition">+ Agregar</button>
+          </div>
+          <p id="base-neumaticos-empty" class="hidden text-sm text-gray-600 mb-6">Todavía no cargaste el neumático base de esta sesión.</p>
+          <div id="base-neumaticos-list" class="grid gap-4 mb-6 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]"></div>
+
+          <div class="flex items-center justify-between mb-3">
+            <p class="form-label mb-0">Setup base</p>
+            <button onclick="openSetupModal(null, true)" class="text-xs font-semibold text-[#c2410c] hover:text-[#e6491b] transition">+ Agregar</button>
+          </div>
+          <p id="base-setups-empty" class="hidden text-sm text-gray-600 mb-6">Todavía no cargaste el setup base de esta sesión.</p>
+          <div id="base-setups-list" class="grid gap-4 mb-6 grid-cols-[repeat(auto-fit,minmax(380px,1fr))]"></div>
+        </div>
+
+        <!-- Grilla de pasadas 1 a 10 -->
+        <div id="pasadas-wrap" class="hidden">
+          <p class="form-label mb-2">Pasadas</p>
+          <div id="pasadas-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-2 sm:gap-3"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         NIVEL 3: Dentro de una Pasada -> Módulos (Neumáticos / Setup / Tramos)
+         ================================================================ -->
+    <section id="screen-pasada" class="screen">
+      <div class="flex mb-6 border-b border-gray-200">
+        <button data-modulo="setup" class="modulo-tab">Setup</button>
+        <button data-modulo="tramos" class="modulo-tab">Tramos</button>
+        <button data-modulo="neumaticos" class="modulo-tab">Neumáticos</button>
+      </div>
+
+      <!-- ---- Módulo: Setup ---- -->
+      <div id="modulo-setup" class="modulo-panel">
+        <div class="flex items-center justify-between mb-6 gap-3">
+          <p class="text-gray-600 text-sm">Suspensión y presiones de referencia de esta pasada.</p>
+          <button onclick="openSetupModal()" class="shrink-0 flex items-center gap-2 bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-medium px-4 py-2.5 rounded-xl transition">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-4 h-4"><path d="M12 5v14M5 12h14"/></svg>
+            <span class="hidden sm:inline">Nuevo setup</span>
+          </button>
+        </div>
+
+        <div id="setups-empty" class="hidden flex-col items-center justify-center text-center py-16">
+          <div class="w-14 h-14 rounded-2xl bg-[#ff5722]/10 text-[#c2410c] flex items-center justify-center mb-4 mx-auto">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-7 h-7">
+              <line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/>
+              <line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/>
+              <line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2"/>
+            </svg>
+          </div>
+          <h3 class="font-display text-base font-semibold mb-1">Todavía no cargaste ningún setup en esta pasada</h3>
+          <p class="text-sm text-gray-600 max-w-sm mx-auto">Tocá "Nuevo setup" para guardar el primero.</p>
+        </div>
+
+        <div id="setups-list" class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(380px,1fr))]"></div>
+      </div>
+
+      <!-- ---- Módulo: Tramos ---- -->
+      <div id="modulo-tramos" class="modulo-panel hidden">
+        <div class="flex items-center justify-between mb-6 gap-3">
+          <p class="text-gray-600 text-sm">Tramos, tiempos y notas de esta pasada.</p>
+          <button onclick="openTramoModal()" class="shrink-0 flex items-center gap-2 bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-medium px-4 py-2.5 rounded-xl transition">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-4 h-4"><path d="M12 5v14M5 12h14"/></svg>
+            <span class="hidden sm:inline">Nuevo tramo</span>
+          </button>
+        </div>
+
+        <div id="tramos-empty" class="hidden flex-col items-center justify-center text-center py-16">
+          <div class="w-14 h-14 rounded-2xl bg-[#ff5722]/10 text-[#c2410c] flex items-center justify-center mb-4 mx-auto">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="w-7 h-7">
+              <path d="M4 21V4"/><path d="M4 4h13l-2.5 3.5L17 11H4"/>
+            </svg>
+          </div>
+          <h3 class="font-display text-base font-semibold mb-1">Todavía no cargaste tramos en esta pasada</h3>
+          <p class="text-sm text-gray-600 max-w-sm mx-auto">Tocá "Nuevo tramo" para registrar el primero.</p>
+        </div>
+
+        <div id="tramos-list" class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(260px,1fr))]"></div>
+      </div>
+
+      <!-- ---- Módulo: Neumáticos ---- -->
+      <div id="modulo-neumaticos" class="modulo-panel hidden">
+        <div class="flex items-center justify-between mb-6 gap-3">
+          <p class="text-gray-600 text-sm">Juegos de neumáticos de esta pasada.</p>
+          <button onclick="openNeumaticoModal()" class="shrink-0 flex items-center gap-2 bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-medium px-4 py-2.5 rounded-xl transition">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-4 h-4"><path d="M12 5v14M5 12h14"/></svg>
+            <span class="hidden sm:inline">Nuevo juego</span>
+          </button>
+        </div>
+
+        <div id="neumaticos-empty" class="hidden flex-col items-center justify-center text-center py-16">
+          <div class="w-14 h-14 rounded-2xl bg-[#ff5722]/10 text-[#c2410c] flex items-center justify-center mb-4 mx-auto">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="w-7 h-7">
+              <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>
+              <path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>
+            </svg>
+          </div>
+          <h3 class="font-display text-base font-semibold mb-1">Todavía no cargaste neumáticos en esta pasada</h3>
+          <p class="text-sm text-gray-600 max-w-sm mx-auto">Tocá "Nuevo juego" para agregar el primero.</p>
+        </div>
+
+        <div id="neumaticos-list" class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ MODAL: Nueva / Editar competencia ============ -->
+<div id="modal-competencia" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="modal-competencia-title" class="font-display text-lg font-semibold text-gray-900">Nueva competencia</h3>
+      <button type="button" onclick="closeCompetenciaModal()" class="text-gray-600 hover:text-gray-900 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-5 h-5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <form id="form-competencia" class="space-y-4">
+      <input type="hidden" id="competencia-id" />
+
+      <div>
+        <label class="form-label">Nombre *</label>
+        <input type="text" id="competencia-nombre-input" required placeholder="Ej: Rally de Argentina" class="form-input" />
+      </div>
+
+      <div>
+        <label class="form-label">Piloto</label>
+        <input type="text" id="competencia-piloto-input" placeholder="Ej: Juan Pérez" class="form-input" />
+      </div>
+
+      <div>
+        <label class="form-label">Fecha</label>
+        <input type="date" id="competencia-fecha-input" class="form-input" />
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeCompetenciaModal()" class="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition">Cancelar</button>
+        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-semibold transition">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Nuevo / Editar neumático ============ -->
+<div id="modal-neumatico" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="modal-neumatico-title" class="font-display text-lg font-semibold text-gray-900">Nuevo juego de neumáticos</h3>
+      <button type="button" onclick="closeNeumaticoModal()" class="text-gray-600 hover:text-gray-900 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-5 h-5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <form id="form-neumatico" class="space-y-4">
+      <input type="hidden" id="neumatico-id" />
+
+      <div>
+        <label class="form-label">Código / Nombre *</label>
+        <input type="text" id="neumatico-codigo" required placeholder="Ej: J1, Delanteros Blandos" class="form-input" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="form-label">Marca</label>
+          <input type="text" id="neumatico-marca" placeholder="Ej: Pirelli" class="form-input" />
+        </div>
+        <div>
+          <label class="form-label">Compuesto</label>
+          <select id="neumatico-compuesto" class="form-input">
+            <option>Blando</option>
+            <option>Medio</option>
+            <option>Duro</option>
+            <option>Lluvia</option>
+            <option>Mixto</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="form-label">Posición</label>
+          <select id="neumatico-posicion" class="form-input">
+            <option>Juego completo (4)</option>
+            <option>Delantero</option>
+            <option>Trasero</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Estado</label>
+          <select id="neumatico-estado" class="form-input">
+            <option>Nuevo</option>
+            <option>Usado</option>
+            <option>Gastado</option>
+            <option>Descartado</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <p class="form-label mb-2">Presión delantera (bar)</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label text-[10px] text-gray-500">En frío</label>
+            <input type="number" step="0.1" min="0" id="neumatico-presion-del-frio" placeholder="Ej: 1.8" class="form-input" />
+          </div>
+          <div>
+            <label class="form-label text-[10px] text-gray-500">En caliente</label>
+            <input type="number" step="0.1" min="0" id="neumatico-presion-del-caliente" placeholder="Ej: 2.1" class="form-input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="form-label mb-2">Presión trasera (bar)</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label text-[10px] text-gray-500">En frío</label>
+            <input type="number" step="0.1" min="0" id="neumatico-presion-tras-frio" placeholder="Ej: 1.8" class="form-input" />
+          </div>
+          <div>
+            <label class="form-label text-[10px] text-gray-500">En caliente</label>
+            <input type="number" step="0.1" min="0" id="neumatico-presion-tras-caliente" placeholder="Ej: 2.1" class="form-input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label">Uso (tramos / kms)</label>
+        <input type="text" id="neumatico-uso" placeholder="Ej: 3 tramos" class="form-input" />
+      </div>
+
+      <div>
+        <label class="form-label">Notas</label>
+        <textarea id="neumatico-notas" rows="2" placeholder="Observaciones..." class="form-input resize-none"></textarea>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeNeumaticoModal()" class="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition">Cancelar</button>
+        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-semibold transition">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Nuevo / Editar setup ============ -->
+<div id="modal-setup" class="modal-overlay hidden">
+  <div class="modal-box modal-box-wide">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="modal-setup-title" class="font-display text-lg font-semibold text-gray-900">Nuevo setup</h3>
+      <button type="button" onclick="closeSetupModal()" class="text-gray-600 hover:text-gray-900 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-5 h-5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <form id="form-setup" class="space-y-4">
+      <input type="hidden" id="setup-id" />
+
+      <div>
+        <label class="form-label">Nombre *</label>
+        <input type="text" id="setup-nombre" required placeholder="Ej: Setup grava seca" class="form-input" />
+      </div>
+
+      <div>
+        <label class="form-label">Superficie</label>
+        <select id="setup-superficie" class="form-input">
+          <option>Grava</option>
+          <option>Asfalto</option>
+          <option>Nieve/Hielo</option>
+          <option>Mixto</option>
+          <option>Lluvia</option>
+        </select>
+      </div>
+
+      <!-- ===== Amortiguador Delantero ===== -->
+      <p class="form-section-title">Amortiguador Delantero</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div><label class="form-label">Alta</label><input type="text" id="setup-ad-altura" class="form-input" /></div>
+        <div><label class="form-label">Baja</label><input type="text" id="setup-ad-baja" class="form-input" /></div>
+        <div><label class="form-label">Expansión</label><input type="text" id="setup-ad-expansion" class="form-input" /></div>
+        <div><label class="form-label">Altura de rosca</label><input type="text" id="setup-ad-altura-rosca" class="form-input" /></div>
+        <div><label class="form-label">Altura puente/piso</label><input type="text" id="setup-ad-altura-puente-piso" class="form-input" /></div>
+        <div><label class="form-label">Espirales</label><input type="text" id="setup-ad-espirales" class="form-input" /></div>
+        <div><label class="form-label">Helpers</label><input type="text" id="setup-ad-helpers" class="form-input" /></div>
+        <div><label class="form-label">Barra dureza</label><input type="text" id="setup-ad-barra-dureza" class="form-input" /></div>
+        <div><label class="form-label">Barra posición</label><input type="text" id="setup-ad-barra-posicion" class="form-input" /></div>
+        <div><label class="form-label">Alineado</label><input type="text" id="setup-ad-alineado" class="form-input" /></div>
+        <div><label class="form-label">Setting</label><input type="text" id="setup-ad-setting" class="form-input" /></div>
+        <div><label class="form-label">RCV</label><input type="text" id="setup-ad-rcv" class="form-input" /></div>
+      </div>
+
+      <!-- ===== Amortiguador Trasero ===== -->
+      <p class="form-section-title">Amortiguador Trasero</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div><label class="form-label">Alta</label><input type="text" id="setup-at-altura" class="form-input" /></div>
+        <div><label class="form-label">Baja</label><input type="text" id="setup-at-baja" class="form-input" /></div>
+        <div><label class="form-label">Expansión</label><input type="text" id="setup-at-expansion" class="form-input" /></div>
+        <div><label class="form-label">Altura de rosca</label><input type="text" id="setup-at-altura-rosca" class="form-input" /></div>
+        <div><label class="form-label">Altura puente/piso</label><input type="text" id="setup-at-altura-puente-piso" class="form-input" /></div>
+        <div><label class="form-label">Espirales</label><input type="text" id="setup-at-espirales" class="form-input" /></div>
+        <div><label class="form-label">Helpers</label><input type="text" id="setup-at-helpers" class="form-input" /></div>
+        <div><label class="form-label">Barra dureza</label><input type="text" id="setup-at-barra-dureza" class="form-input" /></div>
+        <div><label class="form-label">Barra posición</label><input type="text" id="setup-at-barra-posicion" class="form-input" /></div>
+        <div><label class="form-label">Alineado</label><input type="text" id="setup-at-alineado" class="form-input" /></div>
+        <div><label class="form-label">Setting</label><input type="text" id="setup-at-setting" class="form-input" /></div>
+        <div><label class="form-label">RCV</label><input type="text" id="setup-at-rcv" class="form-input" /></div>
+      </div>
+
+      <!-- ===== Diferencial ===== -->
+      <p class="form-section-title form-section-title-accent">Diferencial</p>
+
+      <p class="form-section-subtitle">Delantero</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div><label class="form-label">Rampas</label><input type="text" id="setup-dd-rampas" class="form-input" /></div>
+        <div><label class="form-label">CF</label><input type="text" id="setup-dd-cf" class="form-input" /></div>
+        <div><label class="form-label">Precarga</label><input type="text" id="setup-dd-precarga" class="form-input" /></div>
+      </div>
+
+      <p class="form-section-subtitle">Trasero</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div><label class="form-label">Rampas</label><input type="text" id="setup-dt-rampas" class="form-input" /></div>
+        <div><label class="form-label">CF</label><input type="text" id="setup-dt-cf" class="form-input" /></div>
+        <div><label class="form-label">Precarga</label><input type="text" id="setup-dt-precarga" class="form-input" /></div>
+      </div>
+
+      <div>
+        <label class="form-label">Notas</label>
+        <textarea id="setup-notas" rows="2" placeholder="Observaciones..." class="form-input resize-none"></textarea>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeSetupModal()" class="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition">Cancelar</button>
+        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-semibold transition">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: Nuevo / Editar tramo ============ -->
+<div id="modal-tramo" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="modal-tramo-title" class="font-display text-lg font-semibold text-gray-900">Nuevo tramo</h3>
+      <button type="button" onclick="closeTramoModal()" class="text-gray-600 hover:text-gray-900 transition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-5 h-5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <form id="form-tramo" class="space-y-4">
+      <input type="hidden" id="tramo-id" />
+
+      <div>
+        <label class="form-label">Nombre / Número de tramo *</label>
+        <input type="text" id="tramo-nombre" required placeholder="Ej: TC1 - Villa Carlos Paz" class="form-input" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="form-label">Tiempo</label>
+          <input type="text" id="tramo-tiempo" placeholder="Ej: 12:34.5" class="form-input" />
+        </div>
+        <div>
+          <label class="form-label">Distancia (km)</label>
+          <input type="number" step="0.1" min="0" id="tramo-distancia" placeholder="Ej: 18.3" class="form-input" />
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label">Posición / Puesto</label>
+        <input type="text" id="tramo-posicion" placeholder="Ej: 3°" class="form-input" />
+      </div>
+
+      <div>
+        <label class="form-label">Notas</label>
+        <textarea id="tramo-notas" rows="2" placeholder="Observaciones..." class="form-input resize-none"></textarea>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeTramoModal()" class="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition">Cancelar</button>
+        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-[#e6491b] hover:bg-[#ff5722] text-white text-sm font-semibold transition">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

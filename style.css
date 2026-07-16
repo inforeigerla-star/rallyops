@@ -1,0 +1,293 @@
+/* ==================================================
+   RALLYOPS - style.css
+   Esto complementa a Tailwind (que ya trae la mayoría
+   de los estilos). Acá van solo las cosas que Tailwind
+   no resuelve por sí solo: tipografías, transición
+   entre pantallas y detalles de "app nativa".
+   ================================================== */
+
+html, body {
+  height: 100%;
+  -webkit-tap-highlight-color: transparent; /* saca el "flash" gris al tocar en celular */
+}
+
+/* Aplica la fuente Rajdhani a todo lo que use la clase font-display
+   (títulos, números grandes) para dar look tipo tablero digital */
+.font-display {
+  font-family: 'Rajdhani', 'Inter', sans-serif;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+/* --------------------------------------------------
+   Sistema de pantallas: JavaScript solo agrega o
+   quita la clase "active". Acá definimos qué significa
+   cada estado.
+   -------------------------------------------------- */
+.screen {
+  display: none;
+}
+.screen.active {
+  display: block;
+  animation: fadeIn 0.25s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --------------------------------------------------
+   Pequeña animación al tocar tarjetas (sensación táctil)
+   -------------------------------------------------- */
+.card-tap {
+  transition: transform 0.12s ease;
+}
+.card-tap:active {
+  transform: scale(0.97);
+}
+
+/* --------------------------------------------------
+   Tabs de tipo de sesión (Test / Shakedown / Race)
+   dentro de una competencia.
+   -------------------------------------------------- */
+.sesion-tab {
+  padding: 0.5rem 1.1rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #374151;
+  transition: all 0.15s ease;
+}
+.sesion-tab:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+.sesion-tab-active {
+  background: #e6491b;
+  color: #ffffff;
+}
+.sesion-tab-active:hover {
+  background: #e6491b;
+}
+
+/* --------------------------------------------------
+   Grilla de pasadas (1 a 10) dentro de una sesión.
+   El puntito verde indica que esa pasada ya tiene
+   datos cargados (neumáticos, setup o tramos).
+   -------------------------------------------------- */
+.pasada-btn {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.85rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #374151;
+  transition: all 0.15s ease;
+}
+.pasada-btn:hover {
+  border-color: rgba(230, 73, 27, 0.5);
+}
+.pasada-btn-active {
+  background: #e6491b;
+  border-color: #e6491b;
+  color: #ffffff;
+}
+.pasada-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #10b981;
+}
+.pasada-btn-active .pasada-dot {
+  background: #ffffff;
+}
+/* Segundo puntito (naranja, abajo a la izquierda): indica que esa
+   pasada cargó un neumático o setup PROPIO que además es distinto
+   de lo que hubiera heredado de la pasada anterior o de la base. */
+.pasada-dot-cambio {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #e6491b;
+}
+.pasada-btn-active .pasada-dot-cambio {
+  background: #ffffff;
+}
+
+/* --------------------------------------------------
+   Tabs de módulo dentro de una Pasada
+   (Neumáticos / Setup / Tramos)
+   -------------------------------------------------- */
+.modulo-tab {
+  padding: 0.75rem 0.25rem;
+  margin-right: 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4b5563;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+.modulo-tab:hover {
+  color: #111827;
+}
+.modulo-tab-active {
+  color: #c2410c;
+  border-bottom-color: #e6491b;
+}
+.modulo-panel.hidden {
+  display: none;
+}
+
+/* Reutiliza el mismo criterio para las vistas "Resumen" / "Pasadas"
+   dentro de una competencia (usa las mismas clases .modulo-tab de
+   arriba para las pestañas). */
+.vista-panel.hidden {
+  display: none;
+}
+
+/* Oculta la barra de scroll del contenido principal para que
+   se vea más como una app y menos como una página web */
+#screen-container {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* Edge viejo */
+}
+#screen-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* --------------------------------------------------
+   Modal (ventana emergente) para cargar/editar datos.
+   En celular aparece pegado abajo, en PC centrado.
+   -------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal-overlay.hidden {
+  display: none;
+}
+@media (min-width: 768px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 1rem;
+  }
+}
+
+.modal-box {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
+  border-radius: 1.25rem 1.25rem 0 0;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  overflow-y: auto;
+  animation: slideUp 0.2s ease;
+}
+@media (min-width: 768px) {
+  .modal-box {
+    border-radius: 1.25rem;
+    padding: 2rem;
+  }
+}
+/* Variante más ancha para formularios largos (ej: Setup, con
+   muchos campos de amortiguadores y diferencial). */
+.modal-box-wide {
+  max-width: 880px;
+}
+@keyframes slideUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+/* --------------------------------------------------
+   Campos de formulario (inputs, selects, textarea)
+   -------------------------------------------------- */
+.form-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin-bottom: 0.375rem;
+}
+.form-input {
+  width: 100%;
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.875rem;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.form-input:focus {
+  border-color: #e6491b;
+  box-shadow: 0 0 0 3px rgba(230, 73, 27, 0.12);
+}
+.form-input::placeholder {
+  color: #9ca3af;
+}
+
+/* Título de sección dentro de un formulario largo (ej: "Amortiguador
+   Delantero"). Separa visualmente grupos de campos relacionados. */
+.form-section-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #111827;
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+  border-top: 1px solid #e5e7eb;
+}
+/* Variante para el separador principal "Diferencial": se destaca
+   con el color naranja de acento para marcar el cambio de bloque. */
+.form-section-title-accent {
+  color: #c2410c;
+  border-top: 1px solid #e6491b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85rem;
+}
+/* Subtítulo (ej: "Delantero" / "Trasero" dentro de Diferencial) */
+.form-section-subtitle {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #374151;
+  margin-bottom: 0.25rem;
+}
+
+/* Etiquetas chicas dentro de las tarjetas (compuesto, posición, etc.) */
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef0f3;
+  color: #374151;
+}
