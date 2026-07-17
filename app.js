@@ -742,11 +742,11 @@ function renderResumen() {
         const listaSetup = p.sOwn.length > 0 ? p.sOwn : setupHeredado.list;
 
         return `
-        <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-4 mb-3">
+        <div class="bg-white border border-gray-300 shadow-md rounded-2xl p-4 mb-3">
           <p class="text-xs font-medium text-[#c2410c] uppercase tracking-wide mb-3">Pasada ${p.n}</p>
 
           ${listaNeum.length ? `
-            <p class="text-xs text-gray-600 mb-1.5">Neumáticos</p>
+            <p class="text-xs font-bold text-gray-800 underline decoration-gray-300 underline-offset-4 mb-1.5">Neumáticos</p>
             <div class="grid gap-2 mb-3 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
               ${listaNeum.map((n, i) => {
                 const base = (!usaHeredadoNeum && neumHeredado.list[i]) ? neumHeredado.list[i] : null;
@@ -756,7 +756,7 @@ function renderResumen() {
           ` : ''}
 
           ${listaSetup.length ? `
-            <p class="text-xs text-gray-600 mb-1.5">Setup</p>
+            <p class="text-xs font-bold text-gray-800 underline decoration-gray-300 underline-offset-4 mb-1.5 pt-2 border-t border-gray-200">Setup</p>
             <div class="grid gap-2 mb-3 grid-cols-[repeat(auto-fit,minmax(340px,1fr))]">
               ${listaSetup.map((s, i) => {
                 const base = (!usaHeredadoSetup && setupHeredado.list[i]) ? setupHeredado.list[i] : null;
@@ -766,7 +766,7 @@ function renderResumen() {
           ` : ''}
 
           ${p.tDePasada.length ? `
-            <p class="text-xs text-gray-600 mb-1.5">Tramos</p>
+            <p class="text-xs font-bold text-gray-800 underline decoration-gray-300 underline-offset-4 mb-1.5 pt-2 border-t border-gray-200">Tramos</p>
             <div class="grid gap-2 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
               ${p.tDePasada.map(tramoCard).join('')}
             </div>
@@ -1247,8 +1247,8 @@ function grupoSetupDetalleHtml(titulo, campos, valores) {
   const filas = campos.filter(([, clave]) => valores[clave]);
   if (filas.length === 0) return '';
   return `
-    <div class="mb-3">
-      <p class="text-xs font-semibold text-gray-600 mb-1">${titulo}</p>
+    <div class="mb-3 pt-3 border-t border-gray-200">
+      <p class="text-xs font-bold text-gray-800 underline decoration-gray-300 underline-offset-4 mb-1.5">${titulo}</p>
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-0.5">
         ${filas.map(([, clave, label]) => `
           <p class="text-xs text-gray-700"><span class="text-gray-600">${label}:</span> ${escapeHtml(valores[clave])}</p>
