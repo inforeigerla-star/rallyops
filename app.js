@@ -411,6 +411,13 @@ function showScreen(id) {
   updateHeader();
 }
 
+// Logo + nombre de la app para el título del header. Si "logo.png"
+// no está en la carpeta todavía, el onerror lo saca solo y queda
+// únicamente el texto (no rompe nada mientras tanto).
+function marcaHeaderHtml() {
+  return `<img src="logo.png" alt="" class="h-6 w-auto shrink-0" onerror="this.remove()" /><span class="truncate">You One Racing</span>`;
+}
+
 // Actualiza el título, subtítulo y la flecha de "volver" del
 // header según en qué pantalla estemos parados.
 function updateHeader() {
@@ -430,16 +437,16 @@ function updateHeader() {
 
   if (activeScreen === 'screen-auth') {
     backBtn.classList.add('hidden');
-    title.innerHTML = 'RALLY<span class="text-[#ff5722]">OPS</span>';
+    title.innerHTML = marcaHeaderHtml();
     subtitle.textContent = 'Iniciá sesión';
   } else if (activeScreen === 'screen-pendiente') {
     backBtn.classList.add('hidden');
-    title.innerHTML = 'RALLY<span class="text-[#ff5722]">OPS</span>';
+    title.innerHTML = marcaHeaderHtml();
     subtitle.textContent = 'Esperando aprobación';
   } else if (activeScreen === 'screen-competencias') {
     backBtn.classList.add('hidden');
-    title.innerHTML = 'RALLY<span class="text-[#ff5722]">OPS</span>';
-    subtitle.textContent = 'Mis Competencias';
+    title.innerHTML = marcaHeaderHtml();
+    subtitle.textContent = 'Setup';
   } else if (activeScreen === 'screen-competencia') {
     backBtn.classList.remove('hidden');
     const comp = getList(STORAGE_KEYS.competencias).find(c => c.id === navState.competenciaId);
